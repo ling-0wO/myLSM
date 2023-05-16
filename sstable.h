@@ -33,6 +33,9 @@ class SSTable{
 
     //binary search
     int64_t binarySearch(uint64_t key) {
+        if(key > max || key < min){
+            return -1;
+        }
         int64_t left = 0;
         int64_t right = index_area.size() - 1;
 
@@ -56,7 +59,6 @@ public:
     // Constructor
     SSTable(const std::string& file = ""){
         file_path = file;
-        load(file_path);
     }
     string file_path;
 
@@ -83,16 +85,7 @@ public:
         file.close();
     }
 
-    // Insert a key into the Bloom Filter
-    void insert_bloom(uint64_t key) {
-        uint32_t hash[4];
-        MurmurHash3_x64_128(&key, sizeof(key), 0, hash);
 
-        for (int i = 0; i < 4; i++) {
-            uint32_t pos = hash[i] % bloom_size;
-            bloom_filter[pos] = true;
-        }
-    }
 
     // Search if a key
     bool search_bloom(uint64_t key) {

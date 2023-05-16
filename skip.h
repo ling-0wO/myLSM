@@ -36,6 +36,14 @@ struct skipList{
         for(int i = 0; i < maxLevel; i++)
             head->index[i] = NULL;
     }
+    ~skipList() {
+        node *current_node = head;
+        while (current_node != nullptr) {
+            node *next_node = current_node->index[0];
+            delete current_node;
+            current_node = next_node;
+        }
+    }
 };
 
 

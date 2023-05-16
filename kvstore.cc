@@ -4,7 +4,7 @@
 #include <sstream>
 
 
-KVStore::KVStore(const std::string &dir): KVStoreAPI(dir), sstableDirectory(dir + "/data")
+KVStore::KVStore(const std::string &dir): KVStoreAPI(dir), sstableDirectory("../data")
 {
     if (!utils::dirExists(sstableDirectory)) {
         utils::mkdir(sstableDirectory.c_str());
@@ -22,7 +22,26 @@ KVStore::~KVStore()
  */
 void KVStore::put(uint64_t key, const std::string &s)
 {
+    if(32 * 8 + 10240 * 8 + (count + 1) * (64 + 32) * 8 + str_size + s.size() >= sstable_size){
+        write_sstable();
+        reset();
+
+    }
+    str_size += s.size();
+    count++;
+
+    if(count = 1){
+        min = max = key;
+        for(int i = 0; i < bloom_size; i++){
+            bloom[i] = 0;
+        }
+    }
+    else{
+        if(key > max) max = key;
+        if(key < min) min = key;
+    }
     memTable.insert(key, s);
+    insert_bloom(key);
 }
 /**
  * Returns the (string) value of the given key.
@@ -47,15 +66,19 @@ bool KVStore::del(uint64_t key)
  */
 void KVStore::reset()
 {
+    str_size = 0;
+    count = 0;
+
     clearSkipList();
 }
 
 /**
  * Return a list including all the key-value pair between key1 and key2.
  * keys in the list should be in an ascending order.
- * An empty string indicates not found.
+ * An em
+ * pty string indicates not found.
  */
-void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list)
+void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list)//用不到
 {
     node *p = memTable.head;
     for (int i = memTable.listLevel - 1; i >= 0; i--) {
@@ -75,31 +98,26 @@ void KVStore::scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, s
 void KVStore::write_sstable() {
     // Generate a unique file name for the SSTable
     static uint64_t sstable_id = 0;
-    std::string file_path = sstableDirectory + "/level_" + std::to_string(sstable_id++) + ".sst";
+    std::string file_path = sstableDirectory + "/level-" + std::to_string(sstable_id) + ".sst";
 
     // Open the file for writing
-    std::ofstream sstable_file(file_path, std::ios::binary);
+    std::ofstream sstable_file(file_path);
     if (!sstable_file.is_open()) {
         // Handle file opening error
         std::cerr << "Error: Unable to open file " << file_path << " for writing." << std::endl;
         return;
     }
 
+    // TODO:write the header and the bloom_filter
     // Write the memtable content to the file
-    node *current_node = memTable.head;
-    while (current_node->index[0] != nullptr) {
-        current_node = current_node->index[0];
-        uint64_t key = current_node->key;
-        std::string value = current_node->val;
-
-        // Write key and value to the file
-        sstable_file.write(reinterpret_cast<const char*>(&key), sizeof(uint64_t));
-        uint32_t value_size = static_cast<uint32_t>(value.size());
-        sstable_file.write(reinterpret_cast<const char*>(&value_size), sizeof(uint32_t));
-        sstable_file.write(value.c_str(), value_size);
-    }
-
+    // header
+    sstable_file << sstable_id << count << min << max;
+    // bloom
+    for(int i = 0; i < bloom_size; i++)
+        sstable_file << bloom[i];
     // Close the file
+
+
     sstable_file.close();
 
     // Clear the memtable
