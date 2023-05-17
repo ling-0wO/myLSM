@@ -5,14 +5,14 @@
 #include "sstable.h"
 #include <vector>
 #include <string>
-const uint64_t sstable_size = 2 * 1024 * 1024 * 8;  // 2mb
+const uint64_t sstable_size = 2 * 1024 * 1024;  // 2mb
 class KVStore : public KVStoreAPI {
 	// You can add your implementation here
 private:
     skipList memTable;
     SSTable ssTable;
     std::string sstableDirectory;
-    bool bloom[bloom_size];
+    char bloom[bloom_size];
     void clearSkipList() {
         node *current_node = memTable.head;
         while (current_node != nullptr) {
@@ -49,7 +49,7 @@ public:
 
         for (int i = 0; i < 4; i++) {
             uint32_t pos = hash[i] % bloom_size;
-            bloom[pos] = true;
+            bloom[pos] = 1;
         }
     }
 	void scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list) override;

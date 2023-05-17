@@ -22,7 +22,7 @@ KVStore::~KVStore()
  */
 void KVStore::put(uint64_t key, const std::string &s)
 {
-    if(32 * 8 + 10240 * 8 + (count + 1) * (64 + 32) * 8 + str_size + s.size() >= sstable_size){
+    if(32 + 10240 + (count + 1) * (sizeof(uint32_t) + sizeof(uint64_t)) + (str_size + sizeof(s)) >= sstable_size){
         write_sstable();
         reset();
 
@@ -30,7 +30,7 @@ void KVStore::put(uint64_t key, const std::string &s)
     str_size += s.size();
     count++;
 
-    if(count = 1){
+    if(count == 1){
         min = max = key;
         for(int i = 0; i < bloom_size; i++){
             bloom[i] = 0;
@@ -101,22 +101,45 @@ void KVStore::write_sstable() {
     std::string file_path = sstableDirectory + "/level-" + std::to_string(sstable_id) + ".sst";
 
     // Open the file for writing
-    std::ofstream sstable_file(file_path);
+    std::ofstream sstable_file(file_path, std::ios::binary);
     if (!sstable_file.is_open()) {
         // Handle file opening error
         std::cerr << "Error: Unable to open file " << file_path << " for writing." << std::endl;
         return;
     }
 
-    // TODO:write the header and the bloom_filter
+
     // Write the memtable content to the file
     // header
     sstable_file << sstable_id << count << min << max;
+    //cout <<"header size:" << sizeof(count) +   sizeof(min) +  sizeof(max)<< endl;
     // bloom
-    for(int i = 0; i < bloom_size; i++)
+    for(int i = 0; i < bloom_size; i++){
         sstable_file << bloom[i];
-    // Close the file
+    }
 
+    // key and offset
+    int size = 0;
+    uint64_t current_offset = sizeof(uint32_t) + (count - 1) * (sizeof(uint64_t) + sizeof(uint32_t));
+    node *p = memTable.head->index[0];
+    while (p) {
+        // Write key and offset
+        sstable_file << p->key << current_offset;
+        // Calculate the next offset
+        current_offset += p->val.size() + sizeof(uint64_t) + sizeof(uint32_t);
+        // Move to the next node in the memTable
+        p = p->index[0];
+    }
+    // Then write the val to the sstable
+    p = memTable.head->index[0];
+    while (p) {
+        // Write value length and value
+        uint32_t value_length = static_cast<uint32_t>(p->val.size());;
+        sstable_file.write((const char*)&p->val, value_length);
+        size += p->val.size();
+        // Move to the next node in the memTable
+        p = p->index[0];
+    }
 
     sstable_file.close();
 
