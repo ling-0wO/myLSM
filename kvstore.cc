@@ -166,6 +166,18 @@ std::pair<uint64_t, uint64_t > getHead (std::string file)//
     file_stream >> time >> _count >> _min >> _max;
     return pair<uint64_t, uint64_t>(time, _min);
 };
+std::pair<uint64_t, uint64_t > getHead2 (std::string file)//
+{
+    //get Timestamp And MinKey From File
+    std::ifstream file_stream(file, std::ios::binary);
+    if(!file_stream.is_open()){
+        std::cerr << "Error: Unable to open file " << file << " for reading." << std::endl;
+        return pair<uint64_t, uint64_t>(-1, -1);
+    }
+    uint64_t  time = 0, _count = 0, _min = 0, _max = 0;
+    file_stream >> time >> _count >> _min >> _max;
+    return pair<uint64_t, uint64_t>(_min, _max);
+};
 // The compaction operation
 void KVStore::compaction(int level) {
     // Read all the files in the folder
@@ -174,7 +186,6 @@ void KVStore::compaction(int level) {
     std::vector<std::pair<uint64_t, std::string>> merged_entries;
 
     if(level != 0){
-        // TODO:层中优先选择时间戳最小的若干个文件（时间戳相等选择键最小的文件),使得文件数满足层数要求
         // Sort the raw files in order
         std::sort(files.begin(), files.end(),
                   [](const std::string& a, const std::string& b) {
@@ -188,9 +199,43 @@ void KVStore::compaction(int level) {
                   });
 
         // Choose the lowest files into the merged_entries
+        int file_amount = tableNum[level] - pow(2, level + 1);
+        for(int i = 0; i < file_amount; i++)
+        {
+            sstable_files.push_back(files[i]);
+        }
+
+
+        // Levelx+1层所有key范围与“最小 key 到最大 key”有重叠的 SSTable 文件均被选取
+        uint64_t min_key = getHead2(sstable_files[0]).first;
+        uint64_t max_key = getHead2(sstable_files[file_amount - 1]).second;
+        std::string next_level_path = sstableDirectory + "/level-" + std::to_string(level + 1);
+        vector<string> next_files;
+        if (!utils::dirExists(next_level_path)) {
+            goto Travel;
+        }
+        else{
+            utils::scanDir(sstableDirectory + "/level-" + std::to_string(level + 1),next_files);
+            for(const auto& file : next_files){
+                pair<uint64_t, uint64_t> tmp = getHead2(file);
+                if(tmp.first <= min_key){
+                    if(tmp.second >= min_key)
+                        sstable_files.push_back(file);
+                }
+                else{
+                    if(tmp.first <= max_key)
+                        sstable_files.push_back(file);
+                }
+            }
+        }
+
+
     }
 
-    // TODO:Levelx+1层所有key范围与“最小 key 到最大 key”有重叠的 SSTable 文件均被选取
+
+
+Travel:
+    // Travel the selected files
     for (const auto& file_name : sstable_files) {
         std::string file_path = sstableDirectory + "/level-" + std::to_string(level) + "/" + file_name;
 
@@ -202,6 +247,7 @@ void KVStore::compaction(int level) {
         sstable_file >> time >> _count >> _min >> _max;
         vector<uint64_t> length;
         length.clear();
+
         // Read the key and offset, store the length of each element too.
         uint64_t key = 0;
         uint32_t offset1 = 0, offset2 = 0;
@@ -235,6 +281,7 @@ void KVStore::compaction(int level) {
         uint64_t cur_str = 0;
         int cur_count = 0;
         int cur_start = 0;
+
 
         for (const auto &entry : merged_entries) {
             cur_str += entry.second.size();
