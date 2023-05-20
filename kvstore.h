@@ -5,14 +5,21 @@
 #include "sstable.h"
 #include <vector>
 #include <string>
-const uint64_t sstable_size = 2 * 1024 * 1024;  // 2mb
+#include <filesystem>
+#include <dirent.h>
+
+const uint64_t sstable_size = 2 * 1024 * 1024;  // 2MB
 class KVStore : public KVStoreAPI {
 	// You can add your implementation here
 private:
+    int currentLevel = 0;// 当前的level
+    int sstable_id = 1;// sstable的id
+    int time_stamp = 0;// 生成顺序
     skipList memTable;
-    SSTable ssTable;
+    vector<int> tableNum;
+    SSTable ssTable;//TODO:缓存
     std::string sstableDirectory;
-    char bloom[bloom_size];
+    char bloom[bloom_size]{};
     void clearSkipList() {
         node *current_node = memTable.head;
         while (current_node != nullptr) {
@@ -25,7 +32,7 @@ private:
         for(int i = 0; i < maxLevel; i++)
             memTable.head->index[i] = NULL;
     }
-    void write_sstable();
+    void write_sstable(int level);
     uint64_t count = 0;
     uint64_t str_size = 0;
     uint64_t min, max;
@@ -53,4 +60,8 @@ public:
         }
     }
 	void scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list) override;
+    // TODO:compaction operation
+    void compaction(int level);
+
+
 };
