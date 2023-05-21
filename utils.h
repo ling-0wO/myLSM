@@ -71,7 +71,7 @@ namespace utils{
         while((rent = readdir(dir))){
             strcpy(s,rent->d_name);
             if (s[0] != '.'){
-                ret.push_back(s);
+                ret.push_back(path +"/" + s);
             }   
         }
         closedir(dir);

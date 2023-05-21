@@ -17,9 +17,10 @@ private:
     int time_stamp = 0;// 生成顺序
     skipList memTable;
     vector<int> tableNum;
-    SSTable ssTable;//TODO:缓存
+    vector<SSTable*> ssTables;//TODO:缓存
+    vector<char*> blooms;
     std::string sstableDirectory;
-    char bloom[bloom_size]{};
+    unsigned char* bloom;
     void clearSkipList() {
         node *current_node = memTable.head;
         while (current_node != nullptr) {
@@ -60,8 +61,11 @@ public:
         }
     }
 	void scan(uint64_t key1, uint64_t key2, std::list<std::pair<uint64_t, std::string> > &list) override;
-    // TODO:compaction operation
+    // compaction operation
     void compaction(int level);
 
+    pair<uint64_t, uint64_t > getHead (const std::string &file);
+    pair<uint64_t, uint64_t > getHead2 (const std::string &file);
+    pair<uint64_t, uint64_t > minmax(vector<string> files);
 
 };
